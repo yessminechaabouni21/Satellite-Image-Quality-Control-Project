@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Ignore all raw satellite data and datasets
+data/

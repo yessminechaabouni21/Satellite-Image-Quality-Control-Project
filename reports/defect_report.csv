@@ -1,0 +1,4 @@
+scene,accepted,failed_filter,failure_reason,cloud_cover,nodata_ratio,unique_values,max_dn,toa_dtype
+FLAT_5000_S2A_MSIL1C_20260406T100051_N0512_R122_T32SPF_20260406T151531.SAFE,False,NoDataFilter,Flat: 1 unique values,0.0,,1.0,,
+MISSING_B11_S2A_MSIL1C_20260406T100051_N0512_R122_T32SPF_20260406T151531.SAFE,False,MissingBandsFilter,Missing bands: B11,0.0,,,,
+ZERO_0.5_S2A_MSIL1C_20260406T100051_N0512_R122_T32SPF_20260406T151531.SAFE,False,NoDataFilter,Unexpected nodata: 25.0%,0.0,0.24955494507317494,6450.0,,

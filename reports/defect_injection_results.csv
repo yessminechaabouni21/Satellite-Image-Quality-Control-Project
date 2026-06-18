@@ -1,0 +1,12 @@
+defect,caught,failed_filter,status
+CORRUPTION_zero_50,True,NoDataFilter,✅ CAUGHT
+CORRUPTION_flat,True,TOAScalingFilter,✅ CAUGHT
+CORRUPTION_missing_B11,True,MissingBandsFilter,✅ CAUGHT
+NOISE_weak,False,,❌ MISSED
+NOISE_strong,False,,❌ MISSED
+BLUR_mild,False,,❌ MISSED
+BLUR_severe,False,,❌ MISSED
+STRIPE_light,False,,❌ MISSED
+STRIPE_heavy,False,,❌ MISSED
+HAZE_light,False,,❌ MISSED
+HAZE_heavy,False,,❌ MISSED
