@@ -6,32 +6,103 @@ import numpy as np
 import pandas as pd
 
 
-def load_rgb_fast(scene_path: str, scale=4):
-    """Load RGB at reduced resolution for speed."""
+def load_rgb_crop(scene_path: str, center_y: int = 5490, center_x: int = 5490, 
+                  crop_size: int = 100):
+    """Load RGB at FULL RESOLUTION from a centered crop."""
     granule = list(Path(scene_path).rglob("GRANULE"))[0]
     
     b02 = list(granule.rglob("*_B02.jp2"))[0]
     b03 = list(granule.rglob("*_B03.jp2"))[0]
     b04 = list(granule.rglob("*_B04.jp2"))[0]
     
+    half = crop_size // 2
+    
     with rasterio.open(b04) as src_r, \
          rasterio.open(b03) as src_g, \
          rasterio.open(b02) as src_b:
         
-        # Read at 1/4 resolution (16x faster)
-        h, w = src_r.height // scale, src_r.width // scale
-        r = src_r.read(1, out_shape=(h, w)).astype(np.float32) / 10000
-        g = src_g.read(1, out_shape=(h, w)).astype(np.float32) / 10000
-        b = src_b.read(1, out_shape=(h, w)).astype(np.float32) / 10000
+        window = rasterio.windows.Window(
+            col_off=center_x - half, 
+            row_off=center_y - half,
+            width=crop_size, 
+            height=crop_size
+        )
+        
+        r = src_r.read(1, window=window).astype(np.float32) / 10000
+        g = src_g.read(1, window=window).astype(np.float32) / 10000
+        b = src_b.read(1, window=window).astype(np.float32) / 10000
     
     rgb = np.dstack([r, g, b])
     rgb = np.clip(rgb, 0, 0.3) / 0.3
     return rgb
 
 
-def visualize_defects(defect_dir: str = "data/defective", report_path: str = "reports/defect_injection_results.csv"):
-    """Visualize defective scenes quickly."""
+def create_figure(scene_batch, results, cols=3, crop_size=100):
+    """Create a single figure with up to (cols * rows) images."""
+    n = len(scene_batch)
+    rows = (n + cols - 1) // cols
     
+    fig, axes = plt.subplots(rows, cols, figsize=(4*cols, 4*rows))
+    
+    # Handle single subplot case
+    if n == 1:
+        axes = np.array([axes])
+    else:
+        axes = axes.flatten()
+    
+    for idx, scene_path in enumerate(scene_batch):
+        ax = axes[idx]
+        
+        try:
+            rgb = load_rgb_crop(str(scene_path), crop_size=crop_size)
+            ax.imshow(rgb, interpolation='nearest')
+            
+            # Pixel grid
+            ax.set_xticks(np.arange(-0.5, crop_size, 10), minor=True)
+            ax.set_yticks(np.arange(-0.5, crop_size, 10), minor=True)
+            ax.grid(which='minor', color='white', alpha=0.3, linewidth=0.5)
+            
+        except Exception as e:
+            ax.text(0.5, 0.5, f"Error", ha='center', va='center', transform=ax.transAxes)
+        
+        # Match defect to results
+        scene_name = scene_path.name
+        prefix = scene_name.split('_')[0]
+        result_row = results[results['defect'].str.startswith(prefix)]
+        
+        if len(result_row) > 0:
+            caught = result_row.iloc[0]['caught']
+            filter_name = result_row.iloc[0]['failed_filter']
+            status = "CAUGHT" if caught else "MISSED"
+            color = "green" if caught else "red"
+        else:
+            status = "?"
+            filter_name = "N/A"
+            color = "gray"
+        
+        name = scene_name[:25]
+        title = f"{status}: {name}\n({filter_name})"
+        ax.set_title(title, fontsize=8, color=color)
+        ax.set_xlabel("Pixels", fontsize=7)
+        ax.set_ylabel("Pixels", fontsize=7)
+    
+    # Hide unused subplots
+    total = len(axes)
+    for idx in range(n, total):
+        axes[idx].axis('off')
+    
+    plt.tight_layout()
+    return fig
+
+
+def visualize_defects(defect_dir: str = "data/defective", 
+                      report_path: str = "reports/defect_injection_results.csv",
+                      cols: int = 3,
+                      max_per_figure: int = 9):
+    """
+    Visualize all defective scenes. Automatically splits into multiple figures
+    if there are more than max_per_figure scenes.
+    """
     results = pd.read_csv(report_path)
     scene_paths = sorted(Path(defect_dir).glob("*.SAFE"))
     
@@ -40,58 +111,37 @@ def visualize_defects(defect_dir: str = "data/defective", report_path: str = "re
         return
     
     n = len(scene_paths)
-    cols = min(n, 3)
-    rows = (n + cols - 1) // cols
+    print(f"Found {n} defective scenes.")
     
-    fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4*rows))
-    if n == 1:
-        axes = [axes]
-    else:
-        axes = axes.flatten() if rows > 1 else axes
+    # Split into batches
+    batches = [
+        scene_paths[i:i + max_per_figure] 
+        for i in range(0, n, max_per_figure)
+    ]
     
-    for idx, scene_path in enumerate(scene_paths):
-        ax = axes[idx] if n > 1 else axes[0]
+    saved_paths = []
+    
+    for fig_idx, batch in enumerate(batches):
+        print(f"Creating figure {fig_idx + 1}/{len(batches)} with {len(batch)} images...")
         
-        print(f"Loading {scene_path.name}...")
+        fig = create_figure(batch, results, cols=cols)
         
-        try:
-            rgb = load_rgb_fast(str(scene_path), scale=8)  # Even smaller: 1/8
-            ax.imshow(rgb)
-        except Exception as e:
-            ax.text(0.5, 0.5, f"Error", ha='center', va='center', transform=ax.transAxes)
-        
-        # Get result
-        scene_name = scene_path.name
-        # Match by prefix (e.g., "NOISE_50_" -> "NOISE")
-        prefix = scene_name.split('_')[0]
-        result_row = results[results['defect'].str.startswith(prefix)]
-        
-        if len(result_row) > 0:
-            caught = result_row.iloc[0]['caught']
-            filter_name = result_row.iloc[0]['failed_filter']
-            status = "✅" if caught else "❌"
-            color = "green" if caught else "red"
+        # Save each figure with numbered suffix
+        if len(batches) == 1:
+            output = "reports/visuals/defect_visualization.png"
         else:
-            status = "?"
-            filter_name = "N/A"
-            color = "gray"
+            output = f"reports/visuals/defect_visualization_{fig_idx + 1:02d}.png"
         
-        name = scene_name[:20]
-        title = f"{status} {name}\n{filter_name}"
-        ax.set_title(title, fontsize=8, color=color)
-        ax.axis('off')
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output, dpi=150, bbox_inches='tight')
+        saved_paths.append(output)
+        print(f"  Saved: {output}")
+        
+        plt.show()
+        plt.close(fig)  # Free memory
     
-    # Hide unused
-    for idx in range(n, len(axes) if isinstance(axes, np.ndarray) else 1):
-        axes[idx].axis('off')
-    
-    plt.tight_layout()
-    
-    output = "reports/visuals/defect_visualization.png"
-    Path(output).parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output, dpi=100, bbox_inches='tight')
-    print(f"\nSaved: {output}")
-    plt.show()
+    print(f"\nDone! Saved {len(saved_paths)} figure(s).")
+    return saved_paths
 
 
 if __name__ == "__main__":

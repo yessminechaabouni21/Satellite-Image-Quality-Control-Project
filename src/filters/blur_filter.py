@@ -1,4 +1,3 @@
-# src/filters/blur_filter.py
 import numpy as np
 import rasterio
 import cv2
@@ -8,12 +7,10 @@ from .base import BaseFilter, FilterResult
 
 class BlurFilter(BaseFilter):
     """
-    Detects blurry or out-of-focus scenes using Laplacian variance.
-    Low variance = blurry / uniform (bad)
-    High variance = sharp / textured (good)
+    Detects blurry scenes using Laplacian variance at native resolution.
     """
     
-    def __init__(self, min_variance: float = 100.0):
+    def __init__(self, min_variance: float = 15.0):  # Lowered from 100
         super().__init__()
         self.min_variance = min_variance
     
@@ -25,13 +22,18 @@ class BlurFilter(BaseFilter):
             return FilterResult(passed=False, reason="B04 not found")
         
         with rasterio.open(band_files[0]) as src:
-            # Read at reduced resolution for speed (1/4 scale)
-            data = src.read(1, out_shape=(src.height // 4, src.width // 4))
+            # Read at 1/2 resolution (better balance of speed vs accuracy)
+            h, w = src.height // 2, src.width // 2
+            data = src.read(1, out_shape=(h, w))
             
             # Scale to 0-255 for OpenCV
-            scaled = ((data - data.min()) / (data.max() - data.min() + 1e-8) * 255).astype(np.uint8)
+            dmin, dmax = data.min(), data.max()
+            if dmax == dmin:
+                return FilterResult(passed=False, reason="Uniform image (dead band)")
             
-            # Laplacian variance (sharpness metric)
+            scaled = ((data - dmin) / (dmax - dmin) * 255).astype(np.uint8)
+            
+            # Laplacian variance
             laplacian = cv2.Laplacian(scaled, cv2.CV_64F)
             variance = laplacian.var()
             
@@ -39,10 +41,10 @@ class BlurFilter(BaseFilter):
             
             return FilterResult(
                 passed=passed,
-                reason=None if passed else f"Scene too blurry (variance: {variance:.1f})",
+                reason=None if passed else f"Too blurry (variance: {variance:.1f} < {self.min_variance})",
                 metrics={
                     "laplacian_variance": float(variance),
                     "threshold": self.min_variance,
-                    "resolution_checked": f"{src.height // 4}x{src.width // 4}"
+                    "resolution_checked": f"{h}x{w}"
                 }
             )

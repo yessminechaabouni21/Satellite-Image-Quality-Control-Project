@@ -1,7 +1,8 @@
-# src/run_all_scenes.py
+# src/defects/test_all.py
 from pathlib import Path
-import pandas as pd
-import argparse
+from src.defects.corruption import inject_zero_band, inject_flat_band, inject_missing_band
+from src.defects.noise_blur import inject_noise, inject_blur, inject_stripes
+from src.defects.haze import inject_haze
 from src.pipeline.orchestrator import Pipeline
 from src.filters.metadata_filter import MetadataFilter
 from src.filters.noData_filter import NoDataFilter
@@ -9,106 +10,92 @@ from src.filters.toascaling_filter import TOAScalingFilter
 from src.filters.blur_filter import BlurFilter
 from src.filters.noise_filter import NoiseFilter
 from src.filters.missing_bands_filter import MissingBandsFilter
+from src.filters.stripe_filter import StripeFilter
+import pandas as pd
 
 
-def run_all_scenes(extracted_dir: str = "data/extracted", output_csv: str = "reports/pipeline_report.csv"):
-    """Process all .SAFE scenes in directory and save report."""
-    scene_paths = sorted(Path(extracted_dir).glob("*.SAFE"))
-    print(f"Found {len(scene_paths)} scenes in {extracted_dir}\n")
+def run_all_defect_tests():
+    base = r"data\extracted\S2A_MSIL1C_20260406T100051_N0512_R122_T32SPF_20260406T151531.SAFE"
+    output_dir = "data/defective"
+    Path(output_dir).mkdir(exist_ok=True)
     
-    if len(scene_paths) == 0:
-        print(f"WARNING: No .SAFE scenes found in {extracted_dir}")
-        return pd.DataFrame()
-    
+    # FIXED: Updated pipeline with new filter signatures
     pipeline = Pipeline([
         MetadataFilter(max_cloud=20.0),
-        MissingBandsFilter(required_bands=["B02", "B03", "B04", "B08", "B11"]),
-        
+        MissingBandsFilter(),
+        TOAScalingFilter(),
         NoDataFilter(max_unexpected_nodata_ratio=0.05, min_unique_values=100),
         BlurFilter(min_variance=15.0),
-        NoiseFilter(max_noise_uniformity=0.7, max_dead_pixel_ratio=0.001),
-        TOAScalingFilter()
+        NoiseFilter(max_noise_std_ratio=0.03),      # FIXED: new parameter
+        StripeFilter(max_periodic_power_ratio=0.3),  # NEW: separate stripe filter
+        # HazeFilter disabled for now — your haze injection is multiplicative, not atmospheric
     ])
     
-    all_results = []
-    
-    for scene_path in scene_paths:
-        scene_name = scene_path.name
-        print(f"Processing: {scene_name} ...", end=" ")
-        
-        result = pipeline.run(str(scene_path))
-        
-        # Flatten results
-        row = {
-            "scene": scene_name,
-            "accepted": result["accepted"],
-            "failed_filter": None,
-            "failure_reason": None,
-            "cloud_cover": None,
-            "nodata_ratio": None,
-            "unique_values": None,
-            "max_dn": None,
-            "toa_dtype": None
-        }
-        
-        for filter_name, filter_result in result["results"].items():
-            metrics = filter_result.get("metrics", {})
-            
-            if filter_name == "MetadataFilter":
-                row["cloud_cover"] = metrics.get("cloud_cover")
-            elif filter_name == "NoDataFilter":
-                row["nodata_ratio"] = metrics.get("unexpected_nodata_ratio")
-                row["unique_values"] = metrics.get("unique_values")
-            elif filter_name == "TOAScalingFilter":
-                row["max_dn"] = metrics.get("max_dn")
-                row["toa_dtype"] = metrics.get("dtype")
-            
-            if not filter_result["passed"] and row["failed_filter"] is None:
-                row["failed_filter"] = filter_name
-                row["failure_reason"] = filter_result.get("reason")
-        
-        all_results.append(row)
-        status = "✅ ACCEPTED" if result["accepted"] else f"❌ REJECTED ({row['failed_filter']})"
-        print(status)
-    
-    df = pd.DataFrame(all_results)
-    
-    # Reorder columns
-    cols = [
-        "scene", "accepted", "failed_filter", "failure_reason",
-        "cloud_cover", "nodata_ratio", "unique_values", "max_dn", "toa_dtype"
+    # Generate all defect types
+    defects = [
+        ("CORRUPTION_zero_50", lambda: inject_zero_band(base, output_dir, "B04", 0.5)),
+        ("CORRUPTION_flat", lambda: inject_flat_band(base, output_dir, "B04", 5000)),
+        ("CORRUPTION_missing_B11", lambda: inject_missing_band(base, output_dir, "B11")),
+        ("NOISE_weak", lambda: inject_noise(base, output_dir, "B04", 10)),
+        ("NOISE_strong", lambda: inject_noise(base, output_dir, "B04", 50)),
+        ("BLUR_mild", lambda: inject_blur(base, output_dir, "B04", 7)),
+        ("BLUR_severe", lambda: inject_blur(base, output_dir, "B04", 21)),
+        ("STRIPE_light", lambda: inject_stripes(base, output_dir, "B04", 500)),
+        ("STRIPE_heavy", lambda: inject_stripes(base, output_dir, "B04", 2000)),
+        ("HAZE_light", lambda: inject_haze(base, output_dir, 0.2)),
+        ("HAZE_heavy", lambda: inject_haze(base, output_dir, 0.5)),
     ]
-    df = df[cols] if all(c in df.columns for c in cols) else df
+    
+    results = []
+    
+    for defect_name, defect_func in defects:
+        print(f"\nGenerating: {defect_name}")
+        try:
+            scene = defect_func()
+            print(f"  Testing: {Path(scene).name}")
+            
+            result = pipeline.run(scene)
+            
+            caught = not result["accepted"]
+            failed_filter = next((k for k,v in result["results"].items() if not v["passed"]), None)
+            
+            results.append({
+                "defect": defect_name,
+                "caught": caught,
+                "failed_filter": failed_filter,
+                "status": "✅ CAUGHT" if caught else "❌ MISSED"
+            })
+            
+            print(f"  {results[-1]['status']} by {failed_filter}")
+            
+        except Exception as e:
+            print(f"  ERROR: {e}")
+            results.append({
+                "defect": defect_name,
+                "caught": False,
+                "failed_filter": "ERROR",
+                "status": f"ERROR: {e}"
+            })
     
     # Summary
+    df = pd.DataFrame(results)
     total = len(df)
-    accepted = df["accepted"].sum()
-    rejected = total - accepted
+    caught = df["caught"].sum()
     
     print(f"\n{'='*60}")
-    print(f"PIPELINE RESULTS SUMMARY")
+    print(f"DEFECT INJECTION SUMMARY")
     print(f"{'='*60}")
-    print(f"Directory: {extracted_dir}")
-    print(f"Total scenes: {total}")
-    print(f"Accepted: {accepted} ({accepted/total*100:.1f}%)")
-    print(f"Rejected: {rejected} ({rejected/total*100:.1f}%)")
+    print(f"Total defects: {total}")
+    print(f"Caught: {caught} ({caught/total*100:.1f}%)")
+    print(f"Missed: {total - caught}")
+    print(f"\nMissed defects:")
+    print(df[~df["caught"]][["defect", "failed_filter"]].to_string())
     
-    if rejected > 0:
-        print(f"\nRejection breakdown:")
-        print(df[df["accepted"] == False]["failed_filter"].value_counts().to_string())
-    
-    # Save
-    Path(output_csv).parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_csv, index=False)
-    print(f"\n💾 Saved to: {output_csv}")
+    df.to_csv("reports/defect_injection_results.csv", index=False)
+    print(f"\n💾 Saved: reports/defect_injection_results.csv")
     
     return df
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="EO QC Pipeline")
-    parser.add_argument("--dir", type=str, default="data/extracted", help="Directory with .SAFE scenes")
-    parser.add_argument("--output", type=str, default="reports/pipeline_report.csv", help="Output CSV path")
-    args = parser.parse_args()
-    
-    run_all_scenes(extracted_dir=args.dir, output_csv=args.output)
+    run_all_defect_tests()

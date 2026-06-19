@@ -1,20 +1,23 @@
-# src/filters/haze_filter.py — CORRECTED
 import numpy as np
 import rasterio
 from pathlib import Path
 from .base import BaseFilter, FilterResult
 
+
 class HazeFilter(BaseFilter):
     """
-    Detects haze using Haze Optimized Transformation (HOT).
-    HOT = B02 - 0.5 * B04 - 0.08 (empirical offset)
-    Works better for mixed land-water scenes than simple B02/B04 ratio.
+    Detects haze using Dark Object Subtraction (DOS) approach.
+    Haze elevates the minimum reflectance across all bands uniformly.
+    Normal scenes: dark objects (shadows, water) have near-zero reflectance.
+    Hazy scenes: even dark objects have elevated reflectance.
     """
     
-    def __init__(self, max_hot_score: float = 0.15, max_haze_pixels_ratio: float = 0.3):
+    def __init__(self, 
+                 max_dark_object_reflectance: float = 0.03,  # 3% is typical haze floor
+                 min_valid_pixels: float = 0.1):  # At least 10% of scene must be dark
         super().__init__()
-        self.max_hot_score = max_hot_score
-        self.max_haze_pixels_ratio = max_haze_pixels_ratio
+        self.max_dark_object_reflectance = max_dark_object_reflectance
+        self.min_valid_pixels = min_valid_pixels
     
     def apply(self, scene_path: str) -> FilterResult:
         granule = list(Path(scene_path).rglob("GRANULE"))[0]
@@ -25,44 +28,36 @@ class HazeFilter(BaseFilter):
             return FilterResult(passed=False, reason="B02 or B04 not found")
         
         with rasterio.open(b02[0]) as src_b, rasterio.open(b04[0]) as src_r:
-            # Read at reduced resolution
-            blue = src_b.read(1, out_shape=(src_b.height//4, src_b.width//4)).astype(np.float32) / 10000
-            red = src_r.read(1, out_shape=(src_r.height//4, src_r.width//4)).astype(np.float32) / 10000
+            # Read at 1/8 resolution for speed
+            blue = src_b.read(1, out_shape=(src_b.height//8, src_b.width//8)).astype(np.float32) / 10000
+            red = src_r.read(1, out_shape=(src_r.height//8, src_r.width//8)).astype(np.float32) / 10000
             
-            # HOT (Haze Optimized Transformation)
-            # Higher HOT = more haze
-            hot = blue - 0.5 * red - 0.08
+            # Mask nodata/blackfill
+            valid = (blue > 0.001) & (red > 0.001)
+            blue = blue[valid]
+            red = red[valid]
             
-            # Only consider positive HOT values (haze increases blue)
-            hot_positive = hot[hot > 0]
+            if len(blue) < 1000:
+                return FilterResult(passed=False, reason="Too few valid pixels")
             
-            if len(hot_positive) == 0:
-                # No haze detected at all
-                return FilterResult(
-                    passed=True,
-                    reason=None,
-                    metrics={
-                        "hot_mean": float(np.mean(hot)),
-                        "hot_max": float(np.max(hot)),
-                        "haze_pixels_ratio": 0.0,
-                        "threshold": self.max_hot_score
-                    }
-                )
+            # Dark object: 1st percentile (shadows, water bodies)
+            dark_blue = np.percentile(blue, 1)
+            dark_red = np.percentile(red, 1)
             
-            # Haze pixels: HOT above threshold
-            haze_pixels = np.sum(hot > self.max_hot_score)
-            haze_pixels_ratio = haze_pixels / hot.size
+            # Haze elevates BOTH bands at dark end
+            # Normal: dark objects ~0.00-0.01
+            # Hazy: dark objects > 0.03
+            dark_object_avg = (dark_blue + dark_red) / 2
             
-            passed = haze_pixels_ratio < self.max_haze_pixels_ratio
+            passed = dark_object_avg < self.max_dark_object_reflectance
             
             return FilterResult(
                 passed=passed,
-                reason=None if passed else f"Haze pixels: {haze_pixels_ratio:.1%} (threshold: {self.max_haze_pixels_ratio:.0%})",
+                reason=None if passed else f"Dark object reflectance: {dark_object_avg:.4f}",
                 metrics={
-                    "hot_mean": float(np.mean(hot_positive)),
-                    "hot_max": float(np.max(hot)),
-                    "haze_pixels_ratio": float(haze_pixels_ratio),
-                    "haze_pixels_threshold": self.max_haze_pixels_ratio,
-                    "hot_threshold": self.max_hot_score
+                    "dark_blue_p1": float(dark_blue),
+                    "dark_red_p1": float(dark_red),
+                    "dark_object_avg": float(dark_object_avg),
+                    "threshold": self.max_dark_object_reflectance
                 }
             )

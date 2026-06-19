@@ -10,6 +10,7 @@ from src.filters.toascaling_filter import TOAScalingFilter
 from src.filters.blur_filter import BlurFilter
 from src.filters.noise_filter import NoiseFilter
 from src.filters.missing_bands_filter import MissingBandsFilter
+from src.filters.stripe_filter import StripeFilter
 import pandas as pd
 
 
@@ -18,13 +19,17 @@ def run_all_defect_tests():
     output_dir = "data/defective"
     Path(output_dir).mkdir(exist_ok=True)
     
+    # FIXED: Updated pipeline with new filter signatures
     pipeline = Pipeline([
         MetadataFilter(max_cloud=20.0),
         MissingBandsFilter(),
         TOAScalingFilter(),
         NoDataFilter(max_unexpected_nodata_ratio=0.05, min_unique_values=100),
         BlurFilter(min_variance=15.0),
-        NoiseFilter(max_noise_uniformity=0.7, max_dead_pixel_ratio=0.001)
+        StripeFilter(max_periodic_power_ratio=0.3),
+        NoiseFilter(max_noise_std_ratio=0.03)      # FIXED: new parameter
+          # NEW: separate stripe filter
+        # HazeFilter disabled for now — your haze injection is multiplicative, not atmospheric
     ])
     
     # Generate all defect types
