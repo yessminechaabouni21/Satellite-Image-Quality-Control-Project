@@ -1,0 +1,9 @@
+2026-06-19 17:36:37,236 | INFO     | ============================================================
+2026-06-19 17:36:37,237 | INFO     | EO QC Auto-Pipeline Started
+2026-06-19 17:36:37,237 | INFO     | Watching: data/extracted
+2026-06-19 17:36:37,237 | INFO     | Check interval: 60s
+2026-06-19 17:36:37,237 | INFO     | Press Ctrl+C to stop
+2026-06-19 17:36:37,237 | INFO     | ============================================================
+2026-06-19 17:36:37,239 | INFO     | Initial scenes: 10
+2026-06-19 17:45:33,259 | INFO     | Stopped by user
+2026-06-19 17:45:33,260 | INFO     | Auto-pipeline shutdown complete
