@@ -6,11 +6,7 @@ from .base import BaseFilter, FilterResult
 
 
 class BlurFilter(BaseFilter):
-    """
-    Detects blurry scenes using Laplacian variance at native resolution.
-    """
-    
-    def __init__(self, min_variance: float = 15.0):  # Lowered from 100
+    def __init__(self, min_variance: float = 15.0):
         super().__init__()
         self.min_variance = min_variance
     
@@ -22,18 +18,22 @@ class BlurFilter(BaseFilter):
             return FilterResult(passed=False, reason="B04 not found")
         
         with rasterio.open(band_files[0]) as src:
-            # Read at 1/2 resolution (better balance of speed vs accuracy)
             h, w = src.height // 2, src.width // 2
             data = src.read(1, out_shape=(h, w))
             
-            # Scale to 0-255 for OpenCV
             dmin, dmax = data.min(), data.max()
-            if dmax == dmin:
-                return FilterResult(passed=False, reason="Uniform image (dead band)")
             
+            # FIX: Handle uniform or near-uniform image
+            if dmax - dmin < 10:  # Less than 10 DN range = extremely blurred/dead
+                return FilterResult(
+                    passed=False,
+                    reason=f"Uniform image (range: {dmax-dmin} DN)",
+                    metrics={"laplacian_variance": 0.0, "threshold": self.min_variance, "dn_range": int(dmax-dmin)}
+                )
+            
+            # Scale to 0-255 safely
             scaled = ((data - dmin) / (dmax - dmin) * 255).astype(np.uint8)
             
-            # Laplacian variance
             laplacian = cv2.Laplacian(scaled, cv2.CV_64F)
             variance = laplacian.var()
             
@@ -45,6 +45,6 @@ class BlurFilter(BaseFilter):
                 metrics={
                     "laplacian_variance": float(variance),
                     "threshold": self.min_variance,
-                    "resolution_checked": f"{h}x{w}"
+                    "dn_range": int(dmax - dmin)
                 }
             )

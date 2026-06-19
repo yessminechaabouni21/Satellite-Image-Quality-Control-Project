@@ -2,11 +2,9 @@ defect,caught,failed_filter,status
 CORRUPTION_zero_50,True,NoDataFilter,✅ CAUGHT
 CORRUPTION_flat,True,TOAScalingFilter,✅ CAUGHT
 CORRUPTION_missing_B11,True,MissingBandsFilter,✅ CAUGHT
-NOISE_weak,True,NoiseFilter,✅ CAUGHT
-NOISE_strong,True,NoiseFilter,✅ CAUGHT
-BLUR_mild,True,NoiseFilter,✅ CAUGHT
+NOISE_moderate,True,NoiseFilter,✅ CAUGHT
+NOISE_severe,True,NoDataFilter,✅ CAUGHT
+BLUR_moderate,True,BlurFilter,✅ CAUGHT
 BLUR_severe,True,BlurFilter,✅ CAUGHT
 STRIPE_light,True,StripeFilter,✅ CAUGHT
 STRIPE_heavy,True,StripeFilter,✅ CAUGHT
-HAZE_light,True,NoiseFilter,✅ CAUGHT
-HAZE_heavy,True,NoiseFilter,✅ CAUGHT

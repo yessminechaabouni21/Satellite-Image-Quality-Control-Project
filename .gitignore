@@ -4,3 +4,4 @@ __pycache__/
 
 # Ignore all raw satellite data and datasets
 data/
+outputs/
