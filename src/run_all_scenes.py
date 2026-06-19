@@ -10,6 +10,7 @@ from src.filters.noise_filter import NoiseFilter
 from src.filters.missing_bands_filter import MissingBandsFilter
 from src.filters.stripe_filter import StripeFilter
 # from src.filters.haze_filter import HazeFilter  # DISABLED — too strict on clean scenes
+from src.database import init_db, log_scene, get_stats
 
 
 def run_all_scenes(extracted_dir: str = "data/extracted"):
@@ -29,6 +30,7 @@ def run_all_scenes(extracted_dir: str = "data/extracted"):
         NoiseFilter(max_noise_std_ratio=0.03),    # FIXED: new parameter
         # HazeFilter DISABLED — your clean scenes fail it
     ])
+    conn = init_db()
     
     all_results = []
     
@@ -37,6 +39,7 @@ def run_all_scenes(extracted_dir: str = "data/extracted"):
         print(f"Processing: {scene_name} ...", end=" ")
         
         result = pipeline.run(str(scene_path))
+        log_scene(conn, scene_path, result) 
         
         row = {
             "scene": scene_name,
@@ -69,7 +72,18 @@ def run_all_scenes(extracted_dir: str = "data/extracted"):
         all_results.append(row)
         status = "✅ ACCEPTED" if result["accepted"] else f"❌ REJECTED ({row['failed_filter']})"
         print(status)
-    
+        stats = get_stats(conn)
+        print(f"\n{'='*60}")
+        print(f"DATABASE SUMMARY")
+        print(f"{'='*60}")
+        print(f"Total in DB: {stats['total']}")
+        print(f"Accepted: {stats['accepted']} ({stats['rate']:.1%})")
+        print(f"Rejected: {stats['rejected']}")
+        for reason, count in stats['reasons']:
+            print(f"  - {reason}: {count}")
+
+    conn.close()
+
     df = pd.DataFrame(all_results)
     
     cols = [

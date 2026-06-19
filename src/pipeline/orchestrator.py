@@ -6,6 +6,8 @@ class Pipeline:
     def run(self, scene_path):
 
         results = {}
+        failed_filter = None
+        failure_reason = None
 
         for f in self.filters:
 
@@ -22,14 +24,20 @@ class Pipeline:
             }
 
             if not res.passed:
+                failed_filter = f.name
+                failure_reason = res.reason
                 return {
                     "scene": str(scene_path),
                     "accepted": False,
+                    "failed_filter": failed_filter,
+                    "failure_reason": failure_reason,
                     "results": results
                 }
 
         return {
             "scene": str(scene_path),
             "accepted": True,
+            "failed_filter": None,
+            "failure_reason": None,
             "results": results
         }

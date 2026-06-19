@@ -12,6 +12,7 @@ from src.filters.noise_filter import NoiseFilter
 from src.filters.missing_bands_filter import MissingBandsFilter
 from src.filters.stripe_filter import StripeFilter
 import pandas as pd
+from src.database import init_db, log_defect
 
 
 def run_all_defect_tests():
@@ -29,6 +30,7 @@ def run_all_defect_tests():
         StripeFilter(max_periodic_power_ratio=0.3),
         NoiseFilter(max_noise_std_ratio=0.03),    # FIXED: new parameter, no dead pixels
     ])
+    conn = init_db()
     
     defects = [
         ("CORRUPTION_zero_50", lambda: inject_zero_band(base, output_dir, "B04", 0.5)),
@@ -53,6 +55,7 @@ def run_all_defect_tests():
             print(f"  Testing: {Path(scene).name}")
             
             result = pipeline.run(scene)
+            log_defect(conn, scene, defect_name, result)
             
             caught = not result["accepted"]
             failed_filter = next((k for k, v in result["results"].items() if not v["passed"]), None)
