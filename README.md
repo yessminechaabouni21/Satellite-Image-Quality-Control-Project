@@ -1,66 +1,110 @@
 # EO QC Pipeline
 
-This repository contains an Earth observation quality control pipeline for Sentinel-2 `.SAFE` scenes. The pipeline extracts scene metadata and applies a series of filters to detect issues such as missing bands, radiometric problems, haze, blur, noise, and duplicate scenes.
+Earth observation quality control pipeline for Sentinel-2 `.SAFE` scenes. Applies sequential filters to detect defects including missing bands, noise, blur, stripes, haze, and radiometric anomalies.
 
 ## What is included
 
-- `src/pipeline/orchestrator.py` - simple pipeline runner that applies filters sequentially and stops at the first failed filter.
-- `src/filters/` - filter implementations for scene quality checks and preprocessing.
-- `src/run_all_scenes.py` - module entrypoint for processing all scenes in `data/extracted` and generating a results summary.
-- `src/run_scenes_test.py` - test runner for processing a specified directory and saving a CSV report.
-- `src/defects/` - utilities for generating defective scene variants for pipeline testing.
-- `data/` - source data directories and generated outputs.
-- `reports/` - generated report CSV files.
+- `src/pipeline/orchestrator.py` — pipeline runner that applies filters sequentially and stops at the first failure
+- `src/filters/` — filter implementations for scene quality checks
+- `src/run_all_scenes.py` — process all clean scenes in `data/extracted` and generate a summary report
+- `src/defects/test_defect.py` — inject synthetic defects and verify pipeline detection
+- `src/visualization/visualize_defects.py` — visualize defective scenes at full resolution (100×100 pixel crops)
+- `data/` — source data and generated outputs
+- `reports/` — generated CSV reports and visualizations
 
 ## Pipeline filters
 
-The current pipeline includes the following filters:
+| Filter | Purpose | Catches |
+|--------|---------|---------|
+| `DuplicateFilter` | Detect repeated scenes or duplicate ingestion | Duplicate files |
+| `MetadataFilter` | Check scene metadata | Cloud cover > threshold |
+| `MissingBandsFilter` | Verify required Sentinel-2 bands | Missing B02, B03, B04, B08, B11 |
+| `RadiometricResolutionFilter` | Check bit depth and value distribution | 8-bit instead of 12-bit |
+| `TOAScalingFilter` | Validate TOA reflectance scaling | Wrong scaling, flat bands |
+| `NoDataFilter` | Check for unexpected no-data | >5% no-data, <100 unique values |
+| `BlurFilter` | Measure scene sharpness via Laplacian variance | Gaussian blur (k≥15) |
+| `StripeFilter` | Detect periodic row/column stripes via FFT | Readout interference |
+| `NoiseFilter` | Detect excessive sensor noise via SNR | σ≥500 Gaussian noise |
+| `HazeFilter` | Estimate haze via dark object subtraction | Atmospheric haze |
 
-- `DuplicateFilter` - detects repeated scenes or duplicate ingestion.
-- `MetadataFilter` - checks scene metadata such as cloud cover.
-- `MissingBandsFilter` - verifies that required Sentinel-2 bands are present.
-- `RadiometricResolutionFilter` - checks radiometric bit depth and value distribution.
-- `TOAScalingFilter` - validates top-of-atmosphere scaling and output dtype.
-- `NoDataFilter` - checks for unexpected no-data pixels and low value diversity.
-- `HazeFilter` - estimates haze contamination using a haze score.
-- `BlurFilter` - measures scene sharpness.
-- `NoiseFilter` - detects sensor noise and dead pixel patterns.
+**Note:** `HazeFilter` is currently disabled in the defect test pipeline due to false positives on vegetated scenes.
 
 ## Usage
 
-Activate your Python virtual environment and run the main pipeline:
+### Process clean scenes
 
 ```powershell
 & .\.venv\Scripts\Activate.ps1
 python -m src.run_all_scenes
 ```
 
-Generate a report for a specific directory of defective scenes:
+Output: `reports/pipeline_report.csv` with accept/reject status per scene.
+
+### Test defect detection
 
 ```powershell
-python -m src.run_scenes_test --dir data/defective --output reports/defect_report.csv
+python -m src.defects.test_defect
 ```
+
+Injects 11 synthetic defect types and verifies which are caught. Output: `reports/defect_injection_results.csv`.
+
+### Visualize defects
+
+```powershell
+python -m src.visualization.visualize_defects
+```
+
+Shows 100×100 full-resolution crops of each defective scene. Automatically splits into multiple figures if >9 scenes.
+
+## Defect injection catalog
+
+| Defect | Injection | Detected by |
+|--------|-----------|-------------|
+| `CORRUPTION_zero_50` | 50% of B04 set to zero | `NoDataFilter` |
+| `CORRUPTION_flat` | All B04 set to 5000 DN | `TOAScalingFilter` |
+| `CORRUPTION_missing_B11` | B11 file deleted | `MissingBandsFilter` |
+| `NOISE_moderate` | σ=500 Gaussian noise | `NoiseFilter` |
+| `NOISE_severe` | σ=2000 Gaussian noise | `NoiseFilter` |
+| `BLUR_moderate` | k=15 Gaussian blur | `BlurFilter` |
+| `BLUR_severe` | k=51 Gaussian blur | `BlurFilter` |
+| `STRIPE_light` | +500 DN every 10 rows | `StripeFilter` |
+| `STRIPE_heavy` | +2000 DN every 10 rows | `StripeFilter` |
+
+**Design note:** Moderate defects (σ=100, k=7) are intentionally below rejection thresholds — they represent degraded but usable data. The pipeline targets **severe defects** that invalidate scientific use.
 
 ## Project structure
 
-- `data/extracted/` - extracted Sentinel-2 `.SAFE` scene directories.
-- `data/defective/` - generated defect scenes for QA testing.
-- `src/filters/` - all scene quality filter classes.
-- `src/pipeline/` - pipeline orchestration code.
-- `src/defects/` - defect injection utilities.
-- `src/visualization/` - visualization helpers for scene inspection.
+```
+eo_project/
+├── data/
+│   ├── extracted/          # Clean Sentinel-2 .SAFE scenes
+│   └── defective/          # Generated defect scenes (gitignored)
+├── reports/
+│   ├── pipeline_report.csv
+│   ├── defect_injection_results.csv
+│   └── visuals/            # Generated PNG figures (gitignored)
+├── src/
+│   ├── filters/            # All filter classes
+│   ├── pipeline/           # Orchestrator
+│   ├── defects/            # Injection utilities + test runner
+│   ├── visualization/      # Plotting utilities
+│   ├── run_all_scenes.py   # Clean scene pipeline
+│   └── run_scenes_test.py  # Generic test runner
+└── .gitignore              # Excludes outputs/ data/defective/ reports/visuals/
+```
 
-## Notes
+## Important implementation notes
 
-- The repository is structured to run as a package entrypoint (for example `python -m src.run_all_scenes`).
-- Import paths use `src.filters.<module_name>` and filter filenames must match these module names.
-- The pipeline currently returns a pandas DataFrame with scene-level metrics and accepts/rejects status.
+- **JPEG2000 write limitation:** Defect injection writes modified bands back to `.jp2` files. Some GDAL builds do not support JP2 write — the code falls back to GeoTIFF conversion internally.
+- **Full-resolution visualization:** The visualization script reads 100×100 pixel crops at **native 10m resolution** using `rasterio.windows.Window`. Do not use `out_shape` downsampling — it destroys defect visibility.
+- **Pipeline order matters:** Filters are applied sequentially. Place structural checks (`Metadata`, `MissingBands`) first and sensitive detectors (`Noise`, `Stripe`) last to avoid false positives blocking later filters.
+- **Module imports:** The project uses absolute imports (`src.filters.xxx`). Always run as `python -m src.module_name`, not `python src/module.py`.
 
 ## Next steps
 
-Possible future improvements:
-
-- add end-to-end dataset report generation
-- implement calibration checks for more sensor bands
-- add visualization scripts for accepted vs rejected scenes
-- add structured unit tests for each filter
+- [ ] Add temporal consistency filter (compare against previous acquisition)
+- [ ] Implement band-to-band registration check
+- [ ] Add compression artifact detection
+- [ ] Build Streamlit dashboard for interactive results review
+- [ ] Add unit tests with pytest for each filter
+- [ ] Optimize filter performance with parallel scene processing
