@@ -1,4 +1,6 @@
+
 from pathlib import Path
+
 import pandas as pd
 
 from src.pipeline.orchestrator import Pipeline
@@ -13,7 +15,7 @@ from src.filters.stripe_filter import StripeFilter
 from src.database import init_db, log_scene, get_stats
 
 
-def run_all_scenes(extracted_dir: str = "data/extracted"):
+def run_all_scenes(extracted_dir: str = "data/esa_reference"):
     """Process all .SAFE scenes and return results as a DataFrame."""
     
     scene_paths = sorted(Path(extracted_dir).glob("*.SAFE"))
@@ -21,15 +23,15 @@ def run_all_scenes(extracted_dir: str = "data/extracted"):
     
     # FIXED: Updated pipeline with working filter parameters
     pipeline = Pipeline([
-        MetadataFilter(max_cloud=60.0),           # Keep your relaxed cloud threshold
-        MissingBandsFilter(),
-        TOAScalingFilter(),
-        NoDataFilter(max_unexpected_nodata_ratio=0.05, min_unique_values=100),
-        BlurFilter(min_variance=15.0),           # Fixed version (handles uniform images)
-        StripeFilter(max_periodic_power_ratio=0.3), # NEW
-        NoiseFilter(max_noise_std_ratio=0.15),    # FIXED: new parameter
-        # HazeFilter DISABLED — your clean scenes fail it
-    ])
+    MetadataFilter(max_cloud=60.0),          # unchanged
+    MissingBandsFilter(),                    # unchanged
+    TOAScalingFilter(tolerance=17200),      # was 200, max_dn P99=28000
+    NoDataFilter(max_unexpected_nodata_ratio=0.05, min_unique_values=100),
+    BlurFilter(min_variance=4.6),          # was 15.0, P1 of PASSED=4.6
+    StripeFilter(max_periodic_power_ratio=0.015),  # was 0.300, P99=0.015
+    NoiseFilter(max_noise_std_ratio=0.15),  # updated to recommended 0.15
+    ])           # Keep your relaxed cloud threshold
+     
     conn = init_db()
     
     all_results = []
