@@ -13,7 +13,7 @@ Usage:
     # result: {accepted, failed_filter, failure_reason, results}
 
     # Hybrid mode (Rule Stage 1 + ML Stage 2)
-    pipeline = HybridPipeline(filters, mode="hybrid", if_model_path="models/isolation_forest.pkl")
+    pipeline = HybridPipeline(filters, mode="hybrid")
     result = pipeline.run("scene.SAFE")
     # result adds: {decision, stage1_passed, stage1_failed_filter, stage2_score, reason}
 """
@@ -54,7 +54,7 @@ class HybridPipeline:
     ):
         self.filters = filters
         self.mode = mode
-        self.if_model_path = if_model_path
+        self.if_model_path = if_model_path or "reports/ml/isolation_forest.pkl"
         self.review_low = review_threshold_low
         self.review_high = review_threshold_high
 
@@ -68,21 +68,18 @@ class HybridPipeline:
         if self._stage2 is None and self.mode == "hybrid":
             import pickle
 
-            if self.if_model_path is None:
-                raise ValueError("if_model_path required for hybrid mode")
-
             p = Path(self.if_model_path)
             if not p.exists():
                 raise FileNotFoundError(
                     f"Isolation Forest model not found at {p}. "
-                    "Train first: python -m src.models.train_models"
+                    "Train first: python -m src.ml.train_isolation_forest"
                 )
 
             with open(p, "rb") as f:
                 self._stage2 = pickle.load(f)
 
             # Load scaler if exists
-            scaler_path = p.with_suffix(".scaler.pkl")
+            scaler_path = Path("reports/ml/if_scaler.pkl")
             if scaler_path.exists():
                 with open(scaler_path, "rb") as f:
                     self._scaler = pickle.load(f)
@@ -151,7 +148,7 @@ class HybridPipeline:
                         "stage1_failed_filter": failed_filter,
                         "stage2_score": None,
                         "stage2_raw_score": None,
-                        "reason": f"Stage 1 (Rule-based): Failed {failed_filter} — {failure_reason}",
+                        "reason": f"Stage 1 (Rule-based): Failed {failed_filter} -- {failure_reason}",
                     })
 
                 return base_result
@@ -168,17 +165,17 @@ class HybridPipeline:
         }
 
         # =====================================================================
-        # MODE: RULE_ONLY (original behavior — return now)
+        # MODE: RULE_ONLY (original behavior -- return now)
         # =====================================================================
         if self.mode == "rule_only":
             return base_result
 
         # =====================================================================
-        # MODE: HYBRID (Rule passed — run Stage 2 ML)
+        # MODE: HYBRID (Rule passed -- run Stage 2 ML)
         # =====================================================================
         if self.mode == "hybrid":
             try:
-                from src.features.extractor import extract_scene_features
+                from src.features.extract_features import extract_scene_features
 
                 features = extract_scene_features(scene_path)
                 feature_vector = self._prepare_features(features)
@@ -231,7 +228,7 @@ class HybridPipeline:
                 })
 
             except Exception as e:
-                # Stage 2 failed — fall back to Stage 1 result
+                # Stage 2 failed -- fall back to Stage 1 result
                 base_result.update({
                     "decision": "ACCEPT",
                     "stage1_passed": True,
@@ -248,6 +245,7 @@ class HybridPipeline:
     def _prepare_features(self, features: Dict) -> np.ndarray:
         """Convert feature dict to numpy array in training order."""
         # This must match the feature order used during training
+        # Based on your ml_features.csv columns
         feature_cols = [
             'severity',
             'MetadataFilter__cloud_cover',
@@ -299,10 +297,6 @@ class HybridPipeline:
         return np.array(vec)
 
 
-# =====================================================================
-# Factory function (optional convenience)
-# =====================================================================
-
 def build_pipeline(
     mode: str = "rule_only",
     if_model_path: Optional[str] = None,
@@ -315,7 +309,7 @@ def build_pipeline(
     Parameters
     ----------
     mode : str
-        "rule_only" or "hybrid"
+        "rule_only" (original behavior) or "hybrid" (Rule + ML)
     if_model_path : str, optional
         Path to saved Isolation Forest model
     """
@@ -344,40 +338,3 @@ def build_pipeline(
         review_threshold_low=review_threshold_low,
         review_threshold_high=review_threshold_high,
     )
-
-
-# =====================================================================
-# CLI entry point for testing
-# =====================================================================
-
-if __name__ == "__main__":
-    import sys
-
-    if len(sys.argv) < 2:
-        print("Usage: python -m src.pipeline.orchestrator_hybrid <scene.SAFE> [scene2.SAFE ...]")
-        print("       python -m src.pipeline.orchestrator_hybrid --hybrid <scene.SAFE> [...]")
-        sys.exit(1)
-
-    # Check for --hybrid flag
-    if sys.argv[1] == "--hybrid":
-        mode = "hybrid"
-        scene_paths = sys.argv[2:]
-        pipeline = build_pipeline(mode="hybrid", if_model_path="models/isolation_forest.pkl")
-    else:
-        mode = "rule_only"
-        scene_paths = sys.argv[1:]
-        pipeline = build_pipeline(mode="rule_only")
-
-    print(f"Mode: {mode}")
-    print(f"Scenes: {len(scene_paths)}")
-    print("=" * 60)
-
-    for path in scene_paths:
-        result = pipeline.run(path)
-        print(f"\nScene: {path}")
-        print(f"  accepted: {result['accepted']}")
-        print(f"  failed_filter: {result.get('failed_filter')}")
-        if mode == "hybrid":
-            print(f"  decision: {result.get('decision')}")
-            print(f"  stage2_score: {result.get('stage2_score')}")
-            print(f"  reason: {result.get('reason')}")
