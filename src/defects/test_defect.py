@@ -41,6 +41,19 @@ STRIPE_INTENS  = [100, 500, 1000, 2000]
 
 # Delete each injected .SAFE after testing + logging
 CLEANUP_AFTER_TEST = False
+# When True, skip generating defects that are already present in the
+# `data/defective` output folder. Set to True to resume only missing runs.
+RESUME_MODE = True
+
+
+def expected_scene_name(base_scene_name, defect_type):
+    if defect_type == "CORRUPTION_zero_50":
+        return f"ZERO_0.5_{base_scene_name}"
+    if defect_type == "CORRUPTION_flat":
+        return f"FLAT_5000_{base_scene_name}"
+    if defect_type == "CORRUPTION_missing_B11":
+        return f"MISSING_B11_{base_scene_name}"
+    return f"{defect_type}_{base_scene_name}"
 
 
 def build_pipeline():
@@ -118,6 +131,19 @@ def run_all_defect_tests():
 
     results = []
 
+    # If resuming, compute simple counts of existing vs planned jobs
+    if RESUME_MODE:
+        total_jobs = 0
+        existing_jobs = 0
+        for base in base_scenes:
+            jobs_tmp = build_defect_jobs(base)
+            for defect_type, _, _, _ in jobs_tmp:
+                total_jobs += 1
+                expected = Path(OUTPUT_DIR) / expected_scene_name(base.name, defect_type)
+                if expected.exists():
+                    existing_jobs += 1
+        print(f"Resume mode: {existing_jobs} of {total_jobs} expected jobs already present; will run {total_jobs-existing_jobs} missing jobs.")
+
     for si, base_scene in enumerate(base_scenes, 1):
         base_name = base_scene.name
         jobs = build_defect_jobs(base_scene)
@@ -132,6 +158,12 @@ def run_all_defect_tests():
 
             scene = None
             try:
+                if RESUME_MODE:
+                    expected_scene = Path(OUTPUT_DIR) / expected_scene_name(base_name, defect_type)
+                    if expected_scene.exists():
+                        print(f"  Skipping existing: {expected_scene.name}")
+                        continue
+
                 scene = inject()
                 print(f"  injected: {Path(scene).name}")
 

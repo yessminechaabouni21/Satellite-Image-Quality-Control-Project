@@ -13,7 +13,7 @@ class Pipeline:
 
             res = f.run(scene_path)
 
-            # CLEAN NUMPY TYPES HERE
+            # CLEAN N               UMPY TYPES HERE
             results[f.name] = {
                 "passed": bool(res.passed),
                 "reason": res.reason,
