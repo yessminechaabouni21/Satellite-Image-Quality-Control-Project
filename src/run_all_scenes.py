@@ -25,7 +25,7 @@ def run_all_scenes(extracted_dir: str = "data/extracted"):
         MissingBandsFilter(),
         TOAScalingFilter(),
         NoDataFilter(max_unexpected_nodata_ratio=0.05, min_unique_values=100),
-        BlurFilter(min_variance=15.0),           # Fixed version (handles uniform images)
+        BlurFilter(min_variance=6.827),           # Fixed version (handles uniform images)
         StripeFilter(max_periodic_power_ratio=0.3), # NEW
         NoiseFilter(max_noise_std_ratio=0.15),    # FIXED: new parameter
         # HazeFilter DISABLED — your clean scenes fail it

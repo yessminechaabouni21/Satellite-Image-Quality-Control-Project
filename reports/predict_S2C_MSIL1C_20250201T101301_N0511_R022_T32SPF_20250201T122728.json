@@ -1,0 +1,25 @@
+{
+  "scene": "S2C_MSIL1C_20250201T101301_N0511_R022_T32SPF_20250201T122728.SAFE",
+  "accepted": false,
+  "reason": "Rejected by rule-based pipeline: MetadataFilter \u2014 Cloud too high: 99.996517555538",
+  "rule_based": {
+    "accepted": false,
+    "failed_filter": "MetadataFilter",
+    "failure_reason": "Cloud too high: 99.996517555538"
+  },
+  "radiometric_composite": {
+    "z_score": -0.822,
+    "flagged": false,
+    "dn_range": 8767.0,
+    "max_dn": 17344
+  },
+  "filter_details": {
+    "MetadataFilter": {
+      "passed": false,
+      "reason": "Cloud too high: 99.996517555538",
+      "metrics": {
+        "cloud_cover": 99.996517555538
+      }
+    }
+  }
+}

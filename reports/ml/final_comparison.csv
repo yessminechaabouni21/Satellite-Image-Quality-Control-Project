@@ -1,0 +1,5 @@
+method,tp,fp,fn,tn,precision,recall,f1,fpr,auc
+Rule-based,2,3,6,37,0.4,0.25,0.308,0.075,
+Isolation Forest,0,2,8,38,0.0,0.0,0.0,0.05,0.597
+Random Forest,1,4,7,36,0.2,0.125,0.154,0.1,0.384
+Hybrid,2,4,6,36,0.333,0.25,0.286,0.1,0.781

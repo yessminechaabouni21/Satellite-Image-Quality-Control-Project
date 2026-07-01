@@ -1,0 +1,126 @@
+{
+  "scene": "S2A_MSIL1C_20240507T100601_N0510_R022_T32SPF_20240507T121117.SAFE",
+  "accepted": true,
+  "reason": "Scene passed all rule-based filters and the radiometric composite check.",
+  "rule_based": {
+    "accepted": true,
+    "failed_filter": null,
+    "failure_reason": null
+  },
+  "radiometric_composite": {
+    "z_score": -1.251,
+    "flagged": false,
+    "dn_range": 1880.0,
+    "max_dn": 20211
+  },
+  "filter_details": {
+    "MetadataFilter": {
+      "passed": true,
+      "reason": null,
+      "metrics": {
+        "cloud_cover": 11.283263765495
+      }
+    },
+    "MissingBandsFilter": {
+      "passed": true,
+      "reason": null,
+      "metrics": {
+        "required_bands": [
+          "B02",
+          "B03",
+          "B04",
+          "B08",
+          "B11"
+        ],
+        "found_bands": [
+          "B02",
+          "B03",
+          "B04",
+          "B08",
+          "B11"
+        ],
+        "missing_bands": [],
+        "found_count": 5,
+        "required_count": 5
+      }
+    },
+    "MetadataQualityFilter": {
+      "passed": true,
+      "reason": null,
+      "metrics": {
+        "degraded_anc_pct": 0.0,
+        "degraded_msi_pct": 0.0,
+        "mtd_found": true
+      }
+    },
+    "TOAScalingFilter": {
+      "passed": true,
+      "reason": null,
+      "metrics": {
+        "band_file": "T32SPF_20240507T100601_B04.jp2",
+        "dtype": "uint16",
+        "min_dn": 0,
+        "max_dn": 20211,
+        "dn_p9999": 5863.0,
+        "pct_above_ceiling": 7.288012487572117e-07,
+        "unique_values": 5254,
+        "quantification_value": 10000,
+        "radio_add_offset_xml": -1000,
+        "dn_ceiling": 11200,
+        "processing_baseline": 5.1,
+        "metadata_source": "MTD_MSIL1C.xml"
+      }
+    },
+    "NoDataFilter": {
+      "passed": true,
+      "reason": null,
+      "metrics": {
+        "unexpected_nodata_ratio": 0.0,
+        "threshold": 0.05,
+        "total_nodata_ratio": 0.7723769662343523,
+        "unique_values": 5254,
+        "saturated_ratio": 0.0
+      }
+    },
+    "BlurFilter": {
+      "passed": true,
+      "reason": null,
+      "metrics": {
+        "laplacian_variance": 14.199851294435716,
+        "threshold": 6.827,
+        "dn_range": 21189
+      }
+    },
+    "StripeFilter": {
+      "passed": true,
+      "reason": null,
+      "metrics": {
+        "periodic_power_ratio": 0.013903948111593385,
+        "peak_period_pixels": 114.375,
+        "threshold": 0.3,
+        "detrended_std": 70.88936752847289
+      }
+    },
+    "NoiseFilter": {
+      "passed": true,
+      "reason": null,
+      "metrics": {
+        "noise_std_ratio": 0.0016451175324618816,
+        "noise_std": 3.278719186782837,
+        "signal_median": 1993.0,
+        "threshold": 0.15
+      }
+    },
+    "GeometricFilter": {
+      "passed": true,
+      "reason": null,
+      "metrics": {
+        "shift_row_px": null,
+        "shift_col_px": null,
+        "shift_magnitude_px": null,
+        "shift_error": "Reference scene not found: data/esa_reference/S2A_MSIL1C_20240404T100021_N0510_R122_T32SPF_20240404T120640.SAFE",
+        "reference": "data/esa_reference/S2A_MSIL1C_20240404T100021_N0510_R122_T32SPF_20240404T120640.SAFE"
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "scene": "path\\to\\scene.SAFE",
+  "accepted": false,
+  "reason": "Scene path does not exist: path\\to\\scene.SAFE",
+  "rule_based": null,
+  "radiometric_composite": null,
+  "filter_details": null
+}

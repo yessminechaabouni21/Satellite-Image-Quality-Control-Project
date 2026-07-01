@@ -27,7 +27,7 @@ def run_all_scenes(extracted_dir: str = "data/esa_reference"):
     MissingBandsFilter(),                    # unchanged
     TOAScalingFilter(tolerance=17200),      # was 200, max_dn P99=28000
     NoDataFilter(max_unexpected_nodata_ratio=0.05, min_unique_values=100),
-    BlurFilter(min_variance=4.6),          # was 15.0, P1 of PASSED=4.6
+    BlurFilter(min_variance=6.827),          # was 15.0, P1 of PASSED=4.6
     StripeFilter(max_periodic_power_ratio=0.015),  # was 0.300, P99=0.015
     NoiseFilter(max_noise_std_ratio=0.15),  # updated to recommended 0.15
     ])           # Keep your relaxed cloud threshold

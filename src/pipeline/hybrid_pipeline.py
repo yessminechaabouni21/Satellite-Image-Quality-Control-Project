@@ -62,7 +62,7 @@ class HybridPipeline:
             MissingBandsFilter(),
             TOAScalingFilter(),
             NoDataFilter(max_unexpected_nodata_ratio=0.05, min_unique_values=100),
-            BlurFilter(min_variance=15.0),
+            BlurFilter(min_variance=50.0),
             StripeFilter(max_periodic_power_ratio=0.3),
             NoiseFilter(max_noise_std_ratio=0.15),
         ])
