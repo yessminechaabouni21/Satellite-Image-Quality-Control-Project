@@ -1,8 +1,0 @@
-{
-  "scene": "data\\esa_reference\\S2A_MSIL1C_20240404T100021_N0510_R122_T32SPF_20240404T120640.SAFE",
-  "accepted": false,
-  "reason": "Scene path does not exist: data\\esa_reference\\S2A_MSIL1C_20240404T100021_N0510_R122_T32SPF_20240404T120640.SAFE",
-  "rule_based": null,
-  "radiometric_composite": null,
-  "filter_details": null
-}

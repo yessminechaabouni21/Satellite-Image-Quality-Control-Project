@@ -1,5 +1,0 @@
-Method,TP,FP,FN,TN,Precision,Recall,F1,FPR,AUC
-Rule-based (7 filters),24,1,15,9,0.56,0.62,0.59,0.1,N/A
-Isolation Forest,36,1,3,9,0.973,0.923,0.947,0.1,0.885
-Random Forest,33,0,6,10,1.0,0.846,0.917,0.0,0.931
-Hybrid (Rule + IF),38,1,1,9,0.974,0.974,0.974,0.1,0.931
