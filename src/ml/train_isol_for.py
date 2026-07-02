@@ -2,9 +2,7 @@
 #
 # One-class anomaly detector using Isolation Forest.
 # Trained ONLY on clean scenes — no defective examples needed.
-#
-# Run from repo root:
-#   python -m src.ml.train_isolation_forest
+
 #
 import json
 import pickle
